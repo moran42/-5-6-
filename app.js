@@ -302,21 +302,25 @@
     if (btn) {
       btn.addEventListener("click", async () => {
         renderSyncStatus("connecting");
-        const ok = await TripSync.forcePull();
+        const result = await TripSync.forcePull();
         refreshAll();
         if (window.TripEditor) {
           TripEditor.showToast(
-            ok ? "최신 일정을 불러왔어요" : "동기화에 실패했어요"
+            result.ok
+              ? result.changed
+                ? "최신 일정을 불러왔어요"
+                : "이미 최신 일정이에요"
+              : result.reason || "불러오기에 실패했어요"
           );
         }
-        renderSyncStatus(ok ? "synced" : "error");
+        renderSyncStatus(result.ok ? "synced" : "error", result.reason);
       });
     }
 
     document.addEventListener("visibilitychange", () => {
       if (document.visibilityState === "visible" && TripSync.isEnabled()) {
-        TripSync.forcePull().then((ok) => {
-          if (ok) refreshAll();
+        TripSync.forcePull().then((result) => {
+          if (result.ok) refreshAll();
         });
       }
     });

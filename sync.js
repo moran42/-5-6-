@@ -1,7 +1,6 @@
 const TripSync = (function () {
   const STORAGE_KEY = "jeju-trip-v1";
   const POLL_MS = 3000;
-  const MAX_POLL_ERRORS = 3;
 
   let ready = false;
   let polling = false;
@@ -9,9 +8,7 @@ const TripSync = (function () {
   let saveTimer = null;
   let pendingSave = false;
   let queuedState = null;
-  let lastRemoteAt = 0;
-  let lastLocalAt = 0;
-  let pollErrorCount = 0;
+  let lastKnownRemoteAt = 0;
   const listeners = new Set();
 
   function isConfigured() {
@@ -49,8 +46,9 @@ const TripSync = (function () {
     notify(status);
   }
 
-  function stateTimestamp(state) {
-    return Number(state?.updatedAt || 0);
+  function getLocalAt() {
+    const local = loadLocal();
+    return local?.updatedAt ? Number(local.updatedAt) : 0;
   }
 
   function wrapState(state) {
@@ -64,7 +62,6 @@ const TripSync = (function () {
 
   function saveLocal(state) {
     const wrapped = wrapState(state);
-    lastLocalAt = wrapped.updatedAt;
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(wrapped));
     } catch (err) {
@@ -105,12 +102,11 @@ const TripSync = (function () {
     }
     if (typeof refreshAllPlaces === "function") refreshAllPlaces();
     if (fromRemote) notify("remote-updated");
-    else notify("synced");
     return true;
   }
 
-  async function pullFromCloud({ silent = false } = {}) {
-    if (!isConfigured()) return false;
+  async function pullFromCloud({ force = false } = {}) {
+    if (!isConfigured()) return { ok: false, reason: "not-configured" };
     try {
       const tripId = encodeURIComponent(SUPABASE_CONFIG.tripId || "jeju-2026");
       const res = await fetch(
@@ -120,29 +116,26 @@ const TripSync = (function () {
       if (!res.ok) throw new Error(await readError(res));
 
       const rows = await res.json();
-      pollErrorCount = 0;
-
-      if (!rows.length) return false;
+      if (!rows.length) return { ok: true, changed: false, empty: true };
 
       const remoteAt = new Date(rows[0].updated_at).getTime();
-      if (remoteAt <= lastRemoteAt) return false;
-      lastRemoteAt = remoteAt;
-
       const payload = rows[0].payload || {};
       payload.updatedAt = remoteAt;
-      if (remoteAt > lastLocalAt) {
-        applyState(payload, true);
+
+      const localAt = getLocalAt();
+      const changed = force || remoteAt > localAt || remoteAt > lastKnownRemoteAt;
+
+      lastKnownRemoteAt = remoteAt;
+
+      if (changed) {
+        applyState(payload, force || remoteAt > localAt);
         saveLocal(payload);
       }
-      if (!silent) notify("synced");
-      return true;
+
+      return { ok: true, changed };
     } catch (err) {
-      pollErrorCount += 1;
       console.error("Cloud pull error:", err);
-      if (!silent || pollErrorCount >= MAX_POLL_ERRORS) {
-        notify("error", err.message || "연결을 확인해주세요");
-      }
-      return false;
+      return { ok: false, reason: err.message || "연결 실패" };
     }
   }
 
@@ -166,40 +159,30 @@ const TripSync = (function () {
     try {
       const wrapped = wrapState(state);
       const tripId = SUPABASE_CONFIG.tripId || "jeju-2026";
-      const payload = {
-        days: wrapped.days,
-        kakaoPlaces: wrapped.kakaoPlaces,
-        naverPlaces: wrapped.naverPlaces,
-      };
-      const body = {
-        payload,
-        updated_at: new Date().toISOString(),
-      };
+      const res = await fetch(`${SUPABASE_CONFIG.url}/rest/v1/trip_data`, {
+        method: "POST",
+        headers: {
+          ...headers({ json: true }),
+          Prefer: "resolution=merge-duplicates,return=representation",
+        },
+        body: JSON.stringify({
+          trip_id: tripId,
+          payload: {
+            days: wrapped.days,
+            kakaoPlaces: wrapped.kakaoPlaces,
+            naverPlaces: wrapped.naverPlaces,
+          },
+          updated_at: new Date().toISOString(),
+        }),
+      });
 
-      let res = await fetch(
-        `${SUPABASE_CONFIG.url}/rest/v1/trip_data?trip_id=eq.${encodeURIComponent(tripId)}`,
-        {
-          method: "PATCH",
-          headers: { ...headers({ json: true }), Prefer: "return=minimal" },
-          body: JSON.stringify(body),
-        }
-      );
+      if (!res.ok) throw new Error(await readError(res));
 
-      if (!res.ok && res.status !== 406) {
-        throw new Error(await readError(res));
+      const rows = await res.json();
+      if (rows[0]?.updated_at) {
+        lastKnownRemoteAt = new Date(rows[0].updated_at).getTime();
       }
-
-      if (res.status === 406 || res.status === 404) {
-        res = await fetch(`${SUPABASE_CONFIG.url}/rest/v1/trip_data`, {
-          method: "POST",
-          headers: { ...headers({ json: true }), Prefer: "return=minimal" },
-          body: JSON.stringify({ trip_id: tripId, ...body }),
-        });
-        if (!res.ok) throw new Error(await readError(res));
-      }
-
-      pollErrorCount = 0;
-      lastRemoteAt = wrapped.updatedAt;
+      saveLocal(state);
       notify("saved");
       return true;
     } catch (err) {
@@ -217,21 +200,16 @@ const TripSync = (function () {
   function startPolling() {
     if (!isConfigured() || polling) return;
     polling = true;
-    pollTimer = setInterval(() => {
+    pollTimer = setInterval(async () => {
       if (document.visibilityState !== "visible" || pendingSave) return;
-      pullFromCloud({ silent: true });
+      const result = await pullFromCloud({ force: false });
+      if (!result.ok) notify("error", result.reason);
     }, POLL_MS);
-  }
-
-  function stopPolling() {
-    polling = false;
-    clearInterval(pollTimer);
   }
 
   function bootstrap() {
     const local = loadLocal();
-    if (local && TripStorage.applyRemote(local)) {
-      lastLocalAt = stateTimestamp(local);
+    if (local?.days && TripStorage.applyRemote(local)) {
       if (typeof refreshAllPlaces === "function") refreshAllPlaces();
     }
   }
@@ -245,18 +223,24 @@ const TripSync = (function () {
     }
 
     notify("connecting");
-    const pulled = await pullFromCloud({ silent: true });
-    if (!pulled) {
+    lastKnownRemoteAt = 0;
+    const result = await pullFromCloud({ force: true });
+
+    if (result.ok && result.empty) {
       await pushToCloud(TripStorage.getState(), true);
+    } else if (!result.ok) {
+      notify("error", result.reason);
+      markReady("error");
+      return "error";
     }
+
     startPolling();
-    markReady(pollErrorCount ? "error" : "synced");
-    return pollErrorCount ? "error" : "synced";
+    markReady("synced");
+    return "synced";
   }
 
   function push(state, immediate) {
     saveLocal(state);
-    notify("local-saved");
 
     if (!isConfigured()) {
       notify("local");
@@ -267,37 +251,20 @@ const TripSync = (function () {
   }
 
   async function forcePull() {
-    if (isConfigured()) return pullFromCloud({ silent: false });
-    const local = loadLocal();
-    if (local) {
-      applyState(local, true);
-      return true;
+    if (!isConfigured()) {
+      const local = loadLocal();
+      if (local) {
+        applyState(local, false);
+        return { ok: true };
+      }
+      return { ok: false, reason: "저장된 일정이 없어요" };
     }
-    return false;
-  }
 
-  function exportJson() {
-    const state = TripStorage.getState();
-    return JSON.stringify(wrapState(state), null, 2);
-  }
-
-  function importJson(text) {
-    const parsed = JSON.parse(text);
-    if (!parsed?.days) throw new Error("일정 데이터가 없어요");
-    const wrapped = wrapState(parsed);
-    applyState(wrapped, false);
-    saveLocal(wrapped);
-    pushToCloud(wrapped, true);
-    return true;
-  }
-
-  async function copyShare() {
-    const text = exportJson();
-    if (navigator.clipboard?.writeText) {
-      await navigator.clipboard.writeText(text);
-      return "clipboard";
-    }
-    return text;
+    lastKnownRemoteAt = 0;
+    const result = await pullFromCloud({ force: true });
+    if (!result.ok) return result;
+    notify("synced");
+    return result;
   }
 
   function onUpdate(fn) {
@@ -320,7 +287,7 @@ const TripSync = (function () {
 
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "visible" && isConfigured()) {
-      pullFromCloud({ silent: true });
+      pullFromCloud({ force: false });
     }
   });
 
@@ -328,9 +295,6 @@ const TripSync = (function () {
     init,
     push,
     forcePull,
-    exportJson,
-    importJson,
-    copyShare,
     onUpdate,
     whenReady,
     isConfigured,
