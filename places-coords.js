@@ -6,6 +6,7 @@ const PLACE_COORDS = {
   "제주OK렌터카 반납": [33.512, 126.522],
   "아베베 베이커리 제주": [33.5105, 126.5295],
   "제주 뜨리바다": [33.278, 126.715],
+  "제주 자매국수": [33.5098, 126.5312],
   "어등포해녀촌": [33.51, 126.524],
   "함덕해수욕장": [33.5434, 126.6682],
   "델문도": [33.543, 126.652],
@@ -19,7 +20,7 @@ const PLACE_COORDS = {
   "몰마농 그대와함께 해물라면 성산본점": [33.458, 126.928],
   "회심": [33.495, 126.532],
   "바라나시책골목": [33.537, 126.647],
-  "5L2F": [33.528, 126.66],
+  "5L2F": [33.412, 126.268],
   "시타북바 세화해변": [33.516, 126.86],
   "복자씨연탄구이": [33.46, 126.92],
   "판포포구": [33.305, 126.239],
@@ -40,13 +41,21 @@ const PLACE_COORDS = {
   "매우릉쭈꾸미": [33.542, 126.664],
   "그옛맛": [33.493, 126.528],
   "도두슈퍼마켓": [33.502, 126.472],
-  // 카카오맵 제주 (코스 미포함)
   "동복리 해녀촌": [33.525, 126.855],
   "몽탄 제주점": [33.505, 126.53],
   "월정리 호랑이네": [33.556, 126.795],
   "해맞이쉼터": [33.458, 126.935],
   "목장카페 밭디": [33.455, 126.925],
   "충희요리": [33.252, 126.56],
+  "섭지코지": [33.424, 126.928],
+  "성산일출봉": [33.458, 126.942],
+  "샤이니숲길": [33.445, 126.718],
+  "길갈팜랜드": [33.298, 126.218],
+  "제주목장랜드": [33.315, 126.245],
+  "서우봉": [33.247, 126.559],
+  "돌문화공원": [33.239, 126.691],
+  "오늘도일기": [33.249, 126.561],
+  "수영 후 정리": [33.4, 126.55],
 };
 
 const CATEGORY_GROUPS = {
@@ -76,6 +85,46 @@ function getCoords(name) {
   return key ? PLACE_COORDS[key] : null;
 }
 
+function getKakaoPlaceType(name) {
+  const typeMap = {
+    회심: "먹거리",
+    오병장: "먹거리",
+    번네식당: "먹거리",
+    매우릉쭈꾸미: "먹거리",
+    통일가든: "먹거리",
+    그옛맛: "먹거리",
+
+    글로시말차: "디저트",
+    코삿호다: "디저트",
+    우무: "디저트",
+
+    와토커피: "카페",
+    델문도: "카페",
+    구씨커피로스터스: "카페",
+    "5L2F": "카페",
+    로미뮤직하우스: "카페",
+
+    관곶: "놀거리",
+    바라나시책골목: "놀거리",
+    만춘서점: "놀거리",
+    섭지코지: "놀거리",
+    성산일출봉: "놀거리",
+    샤이니숲길: "놀거리",
+    길갈팜랜드: "놀거리",
+    제주목장랜드: "놀거리",
+    서우봉: "놀거리",
+    돌문화공원: "놀거리",
+
+    행원해변: "수영",
+    판포포구: "수영",
+  };
+  if (typeMap[name]) return typeMap[name];
+  const key = Object.keys(typeMap).find(
+    (k) => name.includes(k) || k.includes(name)
+  );
+  return key ? typeMap[key] : "놀거리";
+}
+
 function buildAllPlaces() {
   const seen = new Set();
   const places = [];
@@ -94,6 +143,7 @@ function buildAllPlaces() {
 
   DAYS.forEach((day) => {
     day.stops.forEach((stop) => {
+      if (stop.name === "수영 후 정리") return;
       add({
         name: stop.name,
         type: stop.type,
@@ -108,42 +158,12 @@ function buildAllPlaces() {
     });
   });
 
-  function getKakaoPlaceType(name) {
-    const typeMap = {
-      회심: "먹거리",
-      오병장: "먹거리",
-      번네식당: "먹거리",
-      매우릉쭈꾸미: "먹거리",
-      통일가든: "먹거리",
-      그옛맛: "먹거리",
+  const kakaoList =
+    typeof getKakaoPlacesList === "function"
+      ? getKakaoPlacesList()
+      : KAKAO_JEJU_PLACES;
 
-      글로시말차: "디저트",
-      코삿호다: "디저트",
-      우무: "디저트",
-
-      와토커피: "카페",
-      델문도: "카페",
-      구씨커피로스터스: "카페",
-      "5L2F": "카페",
-      로미뮤직하우스: "카페",
-
-      관곶: "놀거리",
-      바라나시책골목: "놀거리",
-      KT한림빌딩: "놀거리",
-      만춘서점: "놀거리",
-      도두슈퍼마켓: "놀거리",
-
-      행원해변: "수영",
-      판포포구: "수영",
-    };
-    if (typeMap[name]) return typeMap[name];
-    const key = Object.keys(typeMap).find(
-      (k) => name.includes(k) || k.includes(name)
-    );
-    return key ? typeMap[key] : "놀거리";
-  }
-
-  KAKAO_JEJU_PLACES.forEach((p) => {
+  kakaoList.forEach((p) => {
     add({
       name: p.name,
       type: getKakaoPlaceType(p.name),
@@ -154,24 +174,36 @@ function buildAllPlaces() {
     });
   });
 
-  getUnassignedNaverPlaces().forEach((place) => {
-    const type =
-      place.folder === "디저트"
-        ? "디저트"
-        : place.folder === "놀거리"
-          ? "놀거리"
-          : "먹거리";
-    add({
-      name: place.name,
-      type,
-      address: "제주",
-      dayId: null,
-      inRoute: false,
-      source: "naver",
+  const naverList =
+    typeof getNaverPlacesList === "function"
+      ? getNaverPlacesList()
+      : NAVER_SAVED_PLACES;
+
+  naverList
+    .filter((place) => !isPlaceScheduled(place.name))
+    .forEach((place) => {
+      const type =
+        place.folder === "디저트"
+          ? "디저트"
+          : place.folder === "놀거리"
+            ? "놀거리"
+            : "먹거리";
+      add({
+        name: place.name,
+        type,
+        address: "제주",
+        dayId: null,
+        inRoute: false,
+        source: "naver",
+      });
     });
-  });
 
   return places;
 }
 
-const ALL_PLACES = buildAllPlaces();
+let ALL_PLACES = buildAllPlaces();
+
+function refreshAllPlaces() {
+  ALL_PLACES = buildAllPlaces();
+  return ALL_PLACES;
+}

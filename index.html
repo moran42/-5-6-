@@ -17,6 +17,10 @@
       <p class="hero-badge">7/8 (수) – 7/13 (월) · 5박 6일</p>
       <h1>제주 여행 코스</h1>
       <p class="hero-sub" id="hero-sub"></p>
+      <div class="sync-row">
+        <span id="sync-status" class="sync-status sync-connecting">☁️ 클라우드 연결 중…</span>
+      </div>
+      <div id="sync-banner" class="sync-banner" hidden></div>
       <div class="hero-meta" id="hero-meta"></div>
     </div>
   </header>
@@ -37,34 +41,60 @@
 
     <div class="content-column">
     <section class="day-nav-section">
-      <h2>일정</h2>
+      <div class="section-header-row">
+        <h2>일정</h2>
+        <div class="view-toggle" role="group" aria-label="일정 보기 모드">
+          <button type="button" class="view-btn active" id="btn-view-timeline">타임라인</button>
+          <button type="button" class="view-btn" id="btn-view-edit">코스 편집</button>
+        </div>
+      </div>
       <div class="day-tabs" id="day-tabs" role="tablist"></div>
       <div class="day-content" id="day-content" aria-live="polite"></div>
     </section>
 
     <section class="checklist-section">
       <h2>카카오맵 제주 장소 체크리스트</h2>
-      <p class="section-desc">카카오맵 폴더(91곳) 중 제주 20곳 — 코스에 포함 여부</p>
+      <p class="section-desc">카카오맵 저장 장소 — 코스에 포함 여부</p>
       <ul class="checklist" id="kakao-checklist"></ul>
     </section>
 
     <section class="extra-section">
-      <h2>네이버 저장 장소 (미배정)</h2>
-      <p class="section-desc">먹거리·놀거리·디저트 폴더 중 일정에 없는 곳</p>
+      <div class="section-header-row">
+        <h2>코스 미배정 장소</h2>
+        <button type="button" class="btn-refresh" id="btn-toggle-refresh" title="저장 리스트 새로고침">↻ 새로고침</button>
+      </div>
+      <p class="section-desc">카카오·네이버 저장 장소 중 일정에 없는 곳 — 지도에서 추가한 뒤 아래에 붙여넣기</p>
+      <div class="refresh-panel" id="refresh-panel" hidden>
+        <p class="refresh-hint">한 줄에 하나씩 입력 · <code>장소이름, 지역/폴더</code> 형식 (예: <code>새카페, 조천읍</code>)</p>
+        <label class="refresh-label">카카오맵 추가 장소</label>
+        <textarea id="refresh-kakao" rows="3" placeholder="로미뮤직하우스, 조천읍"></textarea>
+        <label class="refresh-label">네이버맵 추가 장소</label>
+        <textarea id="refresh-naver" rows="3" placeholder="새맛집, 먹거리"></textarea>
+        <div class="refresh-actions">
+          <button type="button" class="btn-primary" id="btn-apply-refresh">미배정 리스트에 반영</button>
+          <button type="button" class="btn-ghost" id="btn-close-refresh">닫기</button>
+        </div>
+      </div>
       <ul class="extra-list" id="extra-list"></ul>
     </section>
     </div>
   </main>
 
   <footer>
-    <p>제주 뜨리바다 기준 동선 · 수영 3회 (함덕·세기알·판포)</p>
-    <p class="footer-note">일정은 현장 상황에 맞게 조정하세요</p>
+    <p>제주 뜨리바다 기준 동선 · 수영 3회 (함덕·행원·판포)</p>
+    <p class="footer-note">GitHub Pages 링크를 메이트와 공유하면 실시간으로 일정이 동기화됩니다</p>
   </footer>
 
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
   <script src="data.js"></script>
+  <script src="firebase-config.js"></script>
+  <script src="sync.js"></script>
+  <script src="storage.js"></script>
   <script src="places-coords.js"></script>
   <script src="map.js"></script>
+  <script src="editor.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
