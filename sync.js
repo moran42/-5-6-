@@ -22,11 +22,16 @@ const TripSync = (function () {
   }
 
   function headers() {
-    return {
-      apikey: SUPABASE_CONFIG.anonKey,
-      Authorization: `Bearer ${SUPABASE_CONFIG.anonKey}`,
+    const key = SUPABASE_CONFIG.anonKey;
+    const h = {
+      apikey: key,
       "Content-Type": "application/json",
     };
+    // sb_publishable_ 키는 JWT가 아니라 Authorization 헤더에 넣으면 거부됨
+    if (!String(key).startsWith("sb_publishable_")) {
+      h.Authorization = `Bearer ${key}`;
+    }
+    return h;
   }
 
   function notify(status, detail) {

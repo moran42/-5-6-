@@ -53,7 +53,7 @@
       if (!TripSync.isConfigured()) {
         banner.hidden = false;
         banner.textContent =
-          "Supabase 미설정 — 이 기기에 자동 저장됩니다. 메이트와 공유하려면 「공유」로 복사 후 카톡으로 보내고, 상대는 「가져오기」를 누르세요.";
+          "Supabase 미연동 — supabase-config.js에 URL·키를 넣어야 자동 동기화됩니다. 지금은 이 기기 저장 + 「공유」/「가져오기」를 쓰세요.";
       } else if (status === "error") {
         banner.hidden = false;
         banner.textContent = `동기화 오류: ${detail || "연결을 확인해주세요"} · JSON 공유는 계속 사용할 수 있어요`;
